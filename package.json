@@ -1,0 +1,16 @@
+{
+  "name": "quedem",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.js",
+    "test": "node --test",
+    "check": "node --check api/index.js && node --check public/app.js"
+  },
+  "engines": { "node": "22.x" },
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2",
+    "luxon": "^3.7.2"
+  }
+}

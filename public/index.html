@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="ca">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f3f0e6">
+  <meta name="robots" content="noindex">
+  <title>Quedem? · Troba el dia que ens va bé</title>
+  <meta name="description" content="Comparteix el pla, indica quan et va bé i trobeu un dia per quedar.">
+  <meta property="og:type" content="website">
+  <meta property="og:locale" content="ca_ES">
+  <meta property="og:site_name" content="Quedem?">
+  <meta property="og:title" content="Quedem? · Posem-hi data.">
+  <meta property="og:description" content="Comparteix el pla, indica quan et va bé i trobeu un dia per quedar.">
+  <meta property="og:image" content="https://quedem-one.vercel.app/social-preview.png">
+  <meta property="og:image:type" content="image/png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Quedem? Posem-hi data. Una agenda compartida amb un horari per a tothom, en verd, crema i groc.">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Quedem? · Posem-hi data.">
+  <meta name="twitter:description" content="Comparteix el pla, indica quan et va bé i trobeu un dia per quedar.">
+  <meta name="twitter:image" content="https://quedem-one.vercel.app/social-preview.png">
+  <link rel="icon" href="/favicon.ico" sizes="32x32 48x48">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" sizes="180x180">
+  <link rel="stylesheet" href="/style.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><a class="brand" href="/" aria-label="Quedem, inici">quedem<span>?</span></a><a class="header-link" id="new-plan" href="/" hidden>Nou pla</a></header>
+  <main>
+    <dialog id="error-dialog" aria-labelledby="error-title"><h2 id="error-title">No s’ha pogut completar</h2><p id="error-message" role="alert"></p><form method="dialog"><button>Tancar</button></form></dialog>
+    <section id="home">
+      <div class="intro"><div><h1>Posem-hi <em>data.</em></h1></div><p>Crea un pla i comparteix l’enllaç amb el grup.</p></div>
+      <div class="panels">
+        <section class="sheet create-sheet"><h2>Què organitzem?</h2><form id="create-form">
+          <div class="row"><label>Nom del pla<input name="title" required maxlength="80" placeholder="Ex.: Trobada del dissabte"></label>
+          <label>Tipus<select name="type"><option>Trobada</option><option>Reunió</option><option>Activitat</option><option>Dinar</option><option>Sopar</option><option>Celebració</option><option>Altres</option></select></label></div>
+          <fieldset class="form-section"><legend>Dies a considerar</legend><div class="row">
+            <div><label for="display-from">Des de</label><div class="date-input"><input id="display-from" data-date="from" type="text" placeholder="dd/mm/aaaa" maxlength="10" required aria-label="Des de, dd/mm/aaaa"><label class="date-picker" title="Obrir calendari">Calendari<input id="create-from" name="from" type="date" aria-label="Seleccionar la data inicial al calendari"></label></div></div>
+            <div><label for="display-to">Fins a</label><div class="date-input"><input id="display-to" data-date="to" type="text" placeholder="dd/mm/aaaa" maxlength="10" required aria-label="Fins a, dd/mm/aaaa"><label class="date-picker" title="Obrir calendari">Calendari<input id="create-to" name="to" type="date" aria-label="Seleccionar la data final al calendari"></label></div></div>
+          </div></fieldset>
+          <fieldset class="form-section"><legend>Un forat a l’agenda</legend><div class="row"><label>Franja horària<select id="create-window" name="window"><option value="mati">Matí · 9–13 h</option><option value="dinar">Dinar · 13–16 h</option><option value="tarda" selected>Tarda · 16–20 h</option><option value="vespre">Vespre · 18–22 h</option><option value="sopar">Sopar · 20–24 h</option></select></label><label>Durada<select id="create-duration" name="duration"><option value="60" selected>1 hora</option><option value="120">2 hores</option><option value="180">3 hores</option><option value="240">4 hores</option></select></label></div></fieldset>
+          <output id="plan-summary" class="plan-summary" for="create-from create-to create-window create-duration" aria-live="polite"></output>
+          <div class="form-bottom"><button>Crear pla</button><p class="hint">Fins a 60 dies. Hora de Barcelona.</p></div>
+        </form></section>
+      </div>
+    </section>
+    <section id="event" hidden>
+      <div class="event-heading"><div><p class="eyebrow" id="event-meta"></p><h1 id="event-title"></h1></div><button class="secondary" id="share">Compartir</button></div>
+      <div id="share-link" hidden><label>Enllaç del pla<input id="invitation-link" readonly></label></div>
+      <dl class="event-scope" aria-label="Condicions de la trobada">
+        <div><dt>Dies</dt><dd id="event-range"></dd></div>
+        <div><dt>Horari · Barcelona</dt><dd id="event-window"></dd></div>
+        <div><dt>Durada</dt><dd id="event-duration"></dd></div>
+      </dl>
+      <div class="event-grid">
+        <section class="sheet availability-sheet" aria-label="La teva participació">
+          <div id="identify" hidden><label>Qui ets?<select id="existing-person"><option value="">No hi soc: afegir-me</option></select></label><p class="hint">Pots canviar de persona en qualsevol moment. Els calendaris són privats.</p></div>
+          <div id="join"><h2>Afegeix-te al pla.</h2><p id="join-privacy" class="hint"></p><form id="join-form"><label>Com et dius?<input name="name" maxlength="40" required placeholder="El teu nom"></label><button>Afegir-me</button></form></div>
+          <div id="person" hidden><p class="eyebrow" id="person-name"></p><h2>La teva disponibilitat</h2>
+            <div class="connections" id="connections"><button id="google" class="secondary">Connectar Google Calendar</button><button id="microsoft" class="secondary">Connectar Outlook</button></div>
+            <p id="sync-status" class="hint"></p>
+            <form id="availability-form">
+              <fieldset id="calendars" hidden><legend>Calendaris</legend><details id="calendar-menu" class="calendar-menu"><summary><span id="calendar-count">Tria els calendaris</span><span class="day-toggle when-closed">Desplegar</span><span class="day-toggle when-open">Plegar</span></summary><div id="calendar-options"><div id="calendar-list"></div><button type="button" id="sync" class="secondary">Actualitzar calendari</button></div></details></fieldset>
+              <fieldset id="conflict-review" hidden><legend>Compromisos flexibles</legend><p id="conflicts-hint" class="hint"></p><button id="review-connect" type="button" class="secondary" hidden>Veure els meus compromisos</button><div id="conflict-list"></div><p class="hint">Marca els que no t’impedeixen venir. El calendari no es modifica.</p></fieldset>
+              <fieldset id="date-editor"><legend>Quan NO et va bé?</legend><p class="hint" id="days-hint"></p><div class="date-toolbar" id="date-toolbar" hidden><button id="edit-days" type="button" hidden>Bloquejar selecció</button></div><div id="day-list" class="day-list" role="group" aria-label="Dates per bloquejar"></div></fieldset>
+            </form>
+            <button id="leave" class="text-button">Retirar la meva participació i dades</button>
+          </div>
+        </section>
+        <dialog id="block-dialog" aria-labelledby="block-title">
+          <form method="dialog" id="block-form">
+            <h2 id="block-title">Quan no et va bé?</h2><p id="block-dates" class="hint"></p>
+            <label class="check"><input type="radio" name="scope" value="day" checked><span>Tot el dia</span></label>
+            <label class="check"><input type="radio" name="scope" value="range"><span>Només una franja horària</span></label>
+            <div class="row" id="block-hours" hidden><label>Des de<select id="block-start"></select></label><label>Fins a<select id="block-end"></select></label></div>
+            <p class="hint" id="block-hint"></p>
+            <p id="block-error" role="alert"></p>
+            <div class="dialog-actions"><button value="block">Bloquejar</button><button value="clear" class="secondary">Treure bloquejos</button><button value="cancel" class="secondary" formnovalidate>Cancel·lar</button></div>
+          </form>
+        </dialog>
+        <section class="sheet results-sheet"><h2>Quan coincidim?</h2><p id="result-summary" class="hint"></p><button id="toggle-partial-days" class="result-filter" aria-expanded="true" aria-controls="results" hidden></button><p id="filtered-empty" class="hint" hidden>No hi ha cap dia amb coincidència completa. Desplega els altres dies per veure les alternatives.</p><div id="results"></div><h3>Participants</h3><ul id="participants"></ul></section>
+      </div>
+      <div class="event-actions"><button id="reload" class="secondary">Actualitzar resultats</button><button id="delete-event" class="text-button" hidden>Eliminar el pla</button></div>
+    </section>
+    <details class="privacy"><summary>Privadesa</summary><p>L’enllaç del pla dona accés al grup. El grup veu la teva disponibilitat i pot seleccionar el teu nom per editar els bloquejos manuals, però no accedeix als calendaris ni als títols dels compromisos. No es modifica cap calendari.</p><p>Les dades es desen al servidor i aquest navegador et recorda durant 90 dies. Pots retirar les teves dades o desconnectar el calendari conservant els bloquejos manuals. Passada una setmana de l’última data del pla, les dades s’eliminen en la següent neteja del servei.</p></details>
+  </main>
+  <footer><span>Quedem?</span></footer>
+</body>
+</html>
