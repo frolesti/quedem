@@ -43,4 +43,5 @@ test('calendar selector is a native expandable menu rather than a show/hide butt
   assert.match(html, /<details id="calendar-menu"[^>]*><summary>/);
   assert(!html.includes('toggle-calendars'));
   assert.match(html, /id="google"[^>]*>Connectar Google Calendar</);
+  assert.match(html, /<\/details><button type="button" id="sync"/);
 });

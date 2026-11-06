@@ -3,12 +3,19 @@ import assert from 'node:assert/strict';
 import { DateTime } from 'luxon';
 import { validateEvent, candidates, datesFor, rank, validateDates, validateFlexibleConflicts, validateSeriesRules, isFlexible, validateBlockedRanges, blockedPeriod, partialConflicts, attendance, overlaps } from '../lib/schedule.js';
 import { encrypt, decrypt, hash, randomToken, requireOrigin } from '../lib/security.js';
-import { microsoftBusy, authorization, calendars, busy, conflicts, canReadDetails, refresh } from '../lib/providers.js';
+import { microsoftBusy, authorization, calendars, googleAccount, busy, conflicts, canReadDetails, refresh } from '../lib/providers.js';
 import { ownView, manualView } from '../api/index.js';
 
 const event = { title: 'Trobada', type: 'Sopar', from: '2026-12-01', to: '2026-12-03', window: 'sopar', duration: 120, namedAvailability: true };
 const now = DateTime.fromISO('2026-11-05', { zone: 'Europe/Madrid' });
 const person = { name: 'Anna', provider: 'manual', confirmed: true, availableDates: ['2026-12-01'], excludedDates: [], busy: [] };
+
+test('Google identity uses exactly one primary calendar, never a shared calendar', () => {
+  assert.equal(googleAccount([{ id: 'shared' }, { id: 'owner', primary: true }]), 'owner');
+  for (const available of [[], [{ id: 'shared' }], [{ primary: true }], [{ id: 'one', primary: true }, { id: 'two', primary: true }]]) {
+    assert.throws(() => googleAccount(available), /principal/);
+  }
+});
 
 test('validates 60-day search, dates and duration', () => {
   assert.deepEqual(validateEvent(event, now), event);

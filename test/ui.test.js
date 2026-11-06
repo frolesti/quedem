@@ -187,6 +187,17 @@ test('provider buttons show disconnect only for the connected provider', () => {
   assert.equal(node('google').textContent, 'Connectar Google Calendar');
 });
 
+test('Google connection remains visible for selected names without offering to disconnect someone else', () => {
+  const { node, evaluate } = ui();
+  evaluate("event = { own: { provider: 'google', manualOnly: true } }; renderConnections();");
+  assert.equal(node('connections').hidden, false);
+  assert.equal(node('google').textContent, 'Connectar Google Calendar');
+  assert.equal(node('reconnect-google').hidden, true);
+  evaluate("event.own.manualOnly = false; failedSync = true; renderConnections();");
+  assert.equal(node('google').textContent, 'Desconnectar Google Calendar');
+  assert.equal(node('reconnect-google').hidden, false);
+});
+
 test('errors remain explicit and closeable without a persistent banner', () => {
   const { node, evaluate } = ui();
   node('error-dialog').showModal = () => { node('error-dialog').open = true; };

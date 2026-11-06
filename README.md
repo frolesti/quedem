@@ -222,14 +222,25 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   calendaris, títols, intervals, flexibilitat, sincronització, autoritzacions,
   retirada de participació ni permisos d'organitzador.
   El servidor rebutja aquestes operacions, no només les oculta a la interfície.
+  «Connectar Google Calendar» continua visible després de seleccionar un nom.
+  L'autorització de Google pot recuperar l'accés privat des d'un altre navegador:
+  si ja hi havia Google vinculat, es verifica el mateix calendari principal
+  del compte, no la coincidència d'un calendari compartit. Les participacions
+  antigues sense identificador de compte es verifiquen amb l'autorització
+  anterior; si ha caducat, cal reconnectar des del navegador original.
+  Una participació manual pot vincular el compte que autoritza expressament.
+  Només després de verificar Google s'emet una cookie privada de navegador,
+  sense enllaços personals ni transferir permisos d'organitzador.
+  Es conserven els bloquejos i, en recuperar Google, els calendaris i les
+  preferències existents. L'estat OAuth continua vinculat al navegador iniciador
+  i a la persona seleccionada. Outlook no disposa d'aquesta recuperació.
   Només es permet en plans amb disponibilitat nominal; els plans antics agregats
   conserven la seva privadesa. Els identificadors públics són opacs, no hashes
   de sessió. El selector sempre queda accessible, també amb una participació
   privada activa. «No hi soc: afegir-me» desfà una selecció i recupera el formulari;
   si el navegador ja té participació pròpia, permet tornar-hi sense perdre dades.
   Els noms repetits demanen seleccionar el participant o afegir un
-  cognom diferent. Els calendaris privats es gestionen des del navegador on
-  s'han connectat. L'organitzador conserva el control del pla només al
+  cognom diferent. L'organitzador conserva el control del pla només al
   navegador on el va crear.
 - Només el mateix participant rep els noms dels seus calendaris i els títols
   dels seus compromisos. Els títols i les autoritzacions es guarden xifrats.
@@ -249,6 +260,9 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   es mostren si encara no n'hi ha cap seleccionat; si ja hi ha selecció,
   es pleguen. L'estat triat es conserva durant els recàlculs i sincronitzacions
   de la pàgina, sense canviar la selecció ni els permisos.
+  «Actualitzar calendari» queda fora del desplegable i continua accessible
+  amb els calendaris plegats. Si falla la sincronització de Google, es mostra
+  també «Reconnectar Google Calendar», sense haver de desconnectar abans.
   Google s'etiqueta «Connectar Google Calendar» i, un cop connectat,
   «Desconnectar Google Calendar»; Outlook segueix el mateix patró.
   Desconnectar demana confirmació, elimina credencials, compromisos, polítiques

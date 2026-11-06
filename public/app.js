@@ -114,7 +114,8 @@ function run(action) {
 function applyDisabled() {
   if (!settings) return;
   for (const provider of ['google', 'microsoft']) {
-    $(provider).hidden = !settings.providers[provider] && event?.own?.provider !== provider;
+    $(provider).hidden = (!settings.providers[provider] && event?.own?.provider !== provider) ||
+      (provider === 'microsoft' && Boolean(event?.own?.manualOnly));
     $(provider).disabled = working;
   }
   $('create-form').querySelector('button').disabled = !settings.ready || working;
@@ -136,9 +137,11 @@ function renderCalendarPanel() {
 }
 
 function renderConnections() {
+  $('connections').hidden = false;
   for (const [provider, label] of [['google', 'Google Calendar'], ['microsoft', 'Outlook']]) {
-    $(provider).textContent = event.own.provider === provider ? `Desconnectar ${label}` : `Connectar ${label}`;
+    $(provider).textContent = !event.own.manualOnly && event.own.provider === provider ? `Desconnectar ${label}` : `Connectar ${label}`;
   }
+  $('reconnect-google').hidden = event.own.manualOnly || event.own.provider !== 'google' || !failedSync;
 }
 
 function check(value, label, selected) {
@@ -349,9 +352,8 @@ function render() {
   if (event.own) {
     mode = event.own.provider;
     $('person-name').textContent = event.own.manualOnly ? `Bloquejos de ${event.own.name}` : `Hola, ${event.own.name}`;
-    $('connections').hidden = Boolean(event.own.manualOnly);
     $('leave').hidden = Boolean(event.own.manualOnly);
-    $('sync-status').textContent = event.own.manualOnly ? 'Pots canviar dies i hores bloquejats. El calendari és privat.'
+    $('sync-status').textContent = event.own.manualOnly ? 'Connecta el teu compte de Google per sincronitzar el calendari. Els bloquejos manuals ja es poden editar.'
       : mode === 'manual' ? 'Disponibilitat manual.'
       : (event.own.syncedAt ? `Actualitzat: ${instant(event.own.syncedAt)}.` : 'Selecciona els calendaris que vols compartir.');
     renderConnections();
@@ -479,11 +481,12 @@ async function connectCalendar(provider) {
   window.location.assign(result.url);
 }
 for (const provider of ['google', 'microsoft']) $(provider).addEventListener('click', run(async () => {
-  if (event.own.provider !== provider) return connectCalendar(provider);
+  if (event.own.manualOnly || event.own.provider !== provider) return connectCalendar(provider);
   if (!window.confirm('Vols desconnectar el calendari? S’eliminaran la connexió i els compromisos desats. Es conservaran els bloquejos manuals; la resta d’horaris comptarà com a disponible.')) return;
   await saveChange('disconnect', {});
   failedSync = false;
 }));
+$('reconnect-google').addEventListener('click', run(() => connectCalendar('google')));
 $('review-connect').addEventListener('click', run(() => connectCalendar('google')));
 $('edit-days').addEventListener('click', openDayDialog);
 $('day-list').addEventListener('pointerdown', e => {
@@ -684,5 +687,7 @@ async function start() {
   if (!settings.ready) showError('El servei no està disponible. Torna-ho a provar més tard.');
   if (params.get('event')) await load(params.get('event').toUpperCase());
   if (oauthNotice === 'denied') showError('Has cancel·lat la connexió del calendari. Pots continuar bloquejant dies i hores manualment.');
+  if (oauthNotice === 'wrong-account') showError('Aquest compte de Google no és el que està vinculat a la persona seleccionada. Torna a connectar amb el compte correcte.');
+  if (oauthNotice === 'original-browser') showError('L’autorització antiga ha caducat i no podem verificar el compte. Reconnecta Google des del navegador on el vas connectar originalment; després podràs identificar-te aquí.');
 }
 start().catch(error => showError(error.message));

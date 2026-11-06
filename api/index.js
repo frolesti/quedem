@@ -1,7 +1,7 @@
-import { database, init, getEvent, people, savePerson, joinPerson, limit, cleanup, resolvePerson, manualPerson, selectManualPerson, clearManualPerson } from '../lib/db.js';
+import { database, init, getEvent, people, savePerson, joinPerson, limit, cleanup, resolvePerson, completeCalendarConnection, manualPerson, selectManualPerson, clearManualPerson } from '../lib/db.js';
 import { AppError, validateEvent, validateDates, datesFor, validateBlockedRanges, validateFlexibleConflicts, validateSeriesRules, isFlexible, partialConflicts, candidates, overlaps, rank, WINDOWS, ZONE } from '../lib/schedule.js';
 import { session, requireOrigin, randomToken, eventCode, hash, encrypt, decrypt, cookie, setCookie, validToken } from '../lib/security.js';
-import { config, PROVIDERS, authorization, exchange, calendars, refresh, busy, conflicts, canReadDetails } from '../lib/providers.js';
+import { config, PROVIDERS, authorization, exchange, calendars, googleAccount, refresh, busy, conflicts, canReadDetails } from '../lib/providers.js';
 
 async function body(req) {
   if (!req.headers['content-type']?.startsWith('application/json')) throw new AppError('Cal enviar JSON.');
@@ -106,7 +106,9 @@ export default async function handler(req, res) {
       if (!pending) throw new AppError('L’autorització ha caducat o ja s’ha utilitzat. Torna a connectar el calendari.', 403);
       const token = cookie(req, `quedem_${pending.event_code}`);
       if (!validToken(token) || hash(token) !== (pending.browser_hash ?? pending.session_hash) ||
-          await participantSession(req, pending.event_code, hash(token)) !== pending.session_hash) {
+          (pending.recovering
+            ? await manualPerson(pending.event_code, hash(token))
+            : await participantSession(req, pending.event_code, hash(token))) !== pending.session_hash) {
         throw new AppError('L’autorització no correspon a aquest navegador.', 403);
       }
       const location = `/?event=${pending.event_code}`;
@@ -119,12 +121,37 @@ export default async function handler(req, res) {
       const tokens = await exchange(provider, { grant_type: 'authorization_code', code, code_verifier: pending.verifier });
       const available = await calendars(provider, tokens.access);
       if (!available.length) throw new AppError('No hem trobat calendaris consultables al teu compte.', 400);
-      await savePerson(pending.event_code, pending.session_hash, {
-        ...own.data, provider, tokens: encrypt(tokens), calendars: available, selected: [],
-        busy: [], conflicts: null, flexibleConflicts: [], reviewedConflicts: [], seriesRules: [], detailsAvailable: canReadDetails(provider, tokens),
-        syncedAt: null, confirmed: false
-      });
-      await clearManualPerson(pending.event_code, hash(token));
+      const calendarAccountId = provider === 'google' ? googleAccount(available) : null;
+      if (pending.recovering) {
+        if (provider !== 'google' || !['google', 'manual'].includes(own.data.provider)) {
+          throw new AppError('Aquesta participació no es pot recuperar amb Google Calendar.', 403);
+        }
+        if (own.data.provider === 'google') {
+          let previousAccount = own.data.calendarAccountId;
+          if (!previousAccount) {
+            try {
+              const previousTokens = await refresh('google', decrypt(own.data.tokens));
+              previousAccount = googleAccount(await calendars('google', previousTokens.access));
+            } catch (error) {
+              if (error instanceof AppError && error.status === 401) return redirect(`${location}&notice=original-browser`);
+              throw error;
+            }
+          }
+          if (previousAccount !== calendarAccountId) return redirect(`${location}&notice=wrong-account`);
+        }
+      }
+      const preserve = provider === 'google' && own.data.provider === 'google' &&
+        (pending.recovering || own.data.calendarAccountId === calendarAccountId);
+      const selected = preserve ? own.data.selected.filter(id => available.some(calendar => calendar.id === id)) : [];
+      const access = pending.recovering ? randomToken() : null;
+      const previous = cookie(req, `quedem_edit_${pending.event_code}`);
+      await completeCalendarConnection(pending.event_code, pending.session_hash, hash(token), own.data, {
+        provider, calendarAccountId, tokens: encrypt(tokens), calendars: available, selected,
+        ...(!preserve ? { busy: [], conflicts: null, flexibleConflicts: [], reviewedConflicts: [], seriesRules: [], syncedAt: null, confirmed: false } : {}),
+        ...(preserve && !selected.length ? { syncedAt: null, confirmed: false } : {}),
+        detailsAvailable: canReadDetails(provider, tokens)
+      }, access ? { tokenHash: hash(access), previousHash: validToken(previous) ? hash(previous) : null } : null);
+      if (access) setCookie(res, `quedem_edit_${pending.event_code}`, access);
       return redirect(`${location}&notice=connected`);
     }
 
@@ -174,8 +201,8 @@ export default async function handler(req, res) {
       await clearManualPerson(code, browserHash);
       return send({ cleared: true });
     }
-    if (manualOnly && action !== 'blocks') {
-      throw new AppError('Seleccionar un nom només permet editar bloquejos manuals. Els calendaris són privats i es gestionen des del navegador on s’han connectat.', 403);
+    if (manualOnly && !['blocks', 'connect'].includes(action)) {
+      throw new AppError('Seleccionar un nom només permet editar bloquejos manuals. Autoritza Google Calendar per recuperar l’accés al teu calendari.', 403);
     }
     if (req.method === 'POST' && action === 'join') {
       const input = await body(req);
@@ -206,7 +233,7 @@ export default async function handler(req, res) {
       return send({ deleted: true });
     }
     if (req.method === 'POST' && action === 'disconnect') {
-      const { tokens, ...data } = own;
+      const { tokens, calendarAccountId, ...data } = own;
       await savePerson(code, sessionHash, {
         ...data, provider: 'manual', confirmed: true, availableDates: datesFor(event.data).filter(day => !own.excludedDates.includes(day)),
         calendars: [], selected: [], busy: [], conflicts: null, syncedAt: null, detailsAvailable: false,
@@ -229,18 +256,21 @@ export default async function handler(req, res) {
       };
       if (input.provider === 'manual') {
         data.provider = 'manual'; data.busy = []; data.syncedAt = null;
-        data.calendars = []; data.selected = []; data.conflicts = null; data.flexibleConflicts = []; data.reviewedConflicts = []; data.seriesRules = []; delete data.tokens;
+        data.calendars = []; data.selected = []; data.conflicts = null; data.flexibleConflicts = []; data.reviewedConflicts = []; data.seriesRules = []; delete data.tokens; delete data.calendarAccountId;
       }
       await savePerson(code, sessionHash, data);
       return send({ saved: true });
     }
     if (req.method === 'POST' && action === 'connect') {
       const input = await body(req);
+      if (manualOnly && (input.provider !== 'google' || !['manual', 'google'].includes(own.provider))) {
+        throw new AppError('La recuperació des d’un altre navegador només està disponible amb Google Calendar.', 403);
+      }
       config(input.provider);
       const state = randomToken();
       const verifier = randomToken();
-      await sql`INSERT INTO quedem_oauth(state_hash, event_code, session_hash, browser_hash, provider, verifier)
-        VALUES (${hash(state)}, ${code}, ${sessionHash}, ${browserHash}, ${input.provider}, ${verifier})`;
+      await sql`INSERT INTO quedem_oauth(state_hash, event_code, session_hash, browser_hash, provider, verifier, recovering)
+        VALUES (${hash(state)}, ${code}, ${sessionHash}, ${browserHash}, ${input.provider}, ${verifier}, ${manualOnly})`;
       return send({ url: authorization(input.provider, state, verifier) });
     }
     if (req.method === 'POST' && action === 'flexibility') {

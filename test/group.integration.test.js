@@ -57,7 +57,7 @@ test('shared plans support name-only blocks and private calendar disconnection w
   assert.equal(initial.proposals.length, 12);
   const [record] = await sql`SELECT session_hash, data FROM quedem_people WHERE event_code=${code}`;
   const privateTitle = 'PRIVATE integration-only commitment';
-  const privateTokens = encrypt({ access: 'integration-only-not-a-real-token' });
+  const privateTokens = encrypt({ access: 'integration-only-not-a-real-token', expires: Date.now() + 3600000 });
   const period = { id: 'private-test', seriesId: 'private-series', start: `${from}T16:00:00Z`, end: `${from}T17:00:00Z` };
   await sql`UPDATE quedem_people SET data=${JSON.stringify({
     ...record.data, provider: 'google', tokens: privateTokens, detailsAvailable: true,
@@ -150,6 +150,112 @@ test('shared plans support name-only blocks and private calendar disconnection w
     assert.equal((await guest(`${path}/blocks`, { excludedDates: ['1900-01-01'], blockedRanges: [] })).status, 400);
     assert.equal((await guest(`${path}/blocks`, { excludedDates: [], blockedRanges: [{ day: from, start: '16:30', end: '17:00' }] })).status, 400);
     assert.equal((await get(owner)).participants.length, 1);
+  });
+
+  await t.test('Google authorization restores private access only for the same account and initiating browser', async () => {
+    const recovering = browser(), wrongBrowser = browser();
+    const nativeFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === 'https://oauth2.googleapis.com/token') {
+        const code = new URLSearchParams(options.body).get('code');
+        return Response.json({ access_token: code === 'wrong' ? 'wrong-account' : 'right-account', expires_in: 3600,
+          refresh_token: 'integration-refresh', scope: 'https://www.googleapis.com/auth/calendar.events.readonly' });
+      }
+      if (String(url).startsWith('https://www.googleapis.com/calendar/v3/users/me/calendarList')) {
+        const wrong = options.headers.Authorization === 'Bearer wrong-account';
+        return Response.json({ items: [
+          { id: wrong ? 'wrong@example.test' : 'right@example.test', summary: 'Primary', primary: true },
+          { id: 'private-calendar', summary: 'PRIVATE CALENDAR' }
+        ] });
+      }
+      return nativeFetch(url, options);
+    };
+    try {
+      const id = (await get(recovering)).participants[0].id;
+      assert.equal((await recovering(`${path}/identify`, { participantId: id })).status, 200);
+      const start = async () => {
+        const response = await recovering(`${path}/connect`, { provider: 'google' });
+        assert.equal(response.status, 200);
+        return new URL(response.data.url).searchParams.get('state');
+      };
+      const stolen = await start();
+      assert.equal((await wrongBrowser(`oauth/google/callback?state=${stolen}&code=right`)).status, 403);
+      assert.equal((await get(recovering)).own.manualOnly, true);
+      const changed = await start();
+      await recovering(`${path}/unidentify`, {});
+      assert.equal((await recovering(`oauth/google/callback?state=${changed}&code=right`)).status, 403);
+      await recovering(`${path}/identify`, { participantId: id });
+      const wrong = await start();
+      const rejected = await recovering(`oauth/google/callback?state=${wrong}&code=wrong`);
+      assert.equal(rejected.status, 303);
+      assert(rejected.headers.get('location').endsWith('notice=wrong-account'));
+      assert.equal((await get(recovering)).own.manualOnly, true);
+      assert.equal((await get(owner)).own.conflicts[0].title, privateTitle);
+      const [beforeExpiry] = await sql`SELECT data FROM quedem_people WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+      const expiredTokens = encrypt({ access: 'expired-integration-token', expires: 0 });
+      await sql`UPDATE quedem_people SET data=jsonb_set(data, '{tokens}', ${JSON.stringify(expiredTokens)}::jsonb)
+        WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+      try {
+        const expired = await start();
+        const blocked = await recovering(`oauth/google/callback?state=${expired}&code=right`);
+        assert.equal(blocked.status, 303);
+        assert(blocked.headers.get('location').endsWith('notice=original-browser'));
+        assert.equal((await get(recovering)).own.manualOnly, true);
+      } finally {
+        await sql`UPDATE quedem_people SET data=${JSON.stringify(beforeExpiry.data)}::jsonb WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+      }
+      const matching = await start();
+      const accepted = await recovering(`oauth/google/callback?state=${matching}&code=right`);
+      assert.equal(accepted.status, 303);
+      assert(accepted.headers.get('set-cookie').includes(`quedem_edit_${code}=`));
+      const restored = await get(recovering);
+      assert.equal(restored.own.manualOnly, undefined);
+      assert.equal(restored.own.conflicts[0].title, privateTitle);
+      assert.deepEqual(restored.own.selected, ['private-calendar']);
+      assert.deepEqual(restored.own.excludedDates, [from]);
+      assert.deepEqual(restored.own.blockedRanges, [{ day: to, start: '16:00', end: '17:00' }]);
+      assert.equal(restored.owner, false);
+      assert.equal(restored.participants.length, 1);
+      assert.equal((await recovering(`oauth/google/callback?state=${matching}&code=right`)).status, 403);
+      const limited = await get(guest);
+      assert.equal(limited.own.manualOnly, true);
+      assert(!JSON.stringify(limited).includes(privateTitle));
+    } finally { globalThis.fetch = nativeFetch; }
+  });
+
+  await t.test('manual participants and new registrations can connect Google without duplicating their name', async () => {
+    const manualOwner = browser(), recovering = browser();
+    assert.equal((await manualOwner(`${path}/join`, { name: 'Manual Google Test' })).status, 200);
+    const person = (await get(manualOwner)).editingId;
+    await recovering(path);
+    await recovering(`${path}/identify`, { participantId: person });
+    const nativeFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      if (String(url) === 'https://oauth2.googleapis.com/token') {
+        return Response.json({ access_token: 'manual-google-access', expires_in: 3600 });
+      }
+      if (String(url).startsWith('https://www.googleapis.com/calendar/v3/users/me/calendarList')) {
+        return Response.json({ items: [{ id: 'manual@example.test', summary: 'Manual Google', primary: true }] });
+      }
+      return nativeFetch(url, options);
+    };
+    try {
+      for (const client of [recovering, manualOwner]) {
+        const connection = await client(`${path}/connect`, { provider: 'google' });
+        assert.equal(connection.status, 200);
+        const state = new URL(connection.data.url).searchParams.get('state');
+        const callback = await client(`oauth/google/callback?state=${state}&code=right`);
+        assert.equal(callback.status, 303);
+        const view = await get(client);
+        assert.equal(view.own.provider, 'google');
+        assert.equal(view.own.manualOnly, undefined);
+        assert.equal(view.own.calendars[0].id, 'manual@example.test');
+      }
+      assert.equal((await get(recovering)).participants.length, 2);
+    } finally {
+      globalThis.fetch = nativeFetch;
+      assert.equal((await manualOwner(`${path}/leave`, undefined, 'DELETE')).status, 200);
+    }
   });
 
   await t.test('OAuth cancellation belongs to its initiating browser and pending connections can be invalidated', async () => {

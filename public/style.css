@@ -119,6 +119,7 @@ legend { font-weight: 650; font-size: 13px; margin-bottom: 10px; }
 .result-filter[aria-expanded="true"]::before { transform: rotate(225deg); }
 .connections { display: flex; flex-wrap: wrap; gap: 8px; }
 .connections button { font-size: 12px; padding: 10px 12px; }
+#sync { margin-top: 12px; }
 .day-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
 .day-choice { display: grid; gap: 6px; text-align: left; touch-action: none; user-select: none; font-weight: 400; }
 .day-choice small { font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; }
