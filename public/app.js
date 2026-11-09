@@ -331,20 +331,19 @@ function renderIdentity() {
   $('existing-person').value = event.editingId ?? '';
 }
 
-function participantNeedsSync(person, now = Date.now()) {
-  return !person.ready || Boolean(person.updatedAt &&
-    (!Number.isFinite(Date.parse(person.updatedAt)) || now - Date.parse(person.updatedAt) > 86400000));
+function participantNeedsAvailability(person) {
+  return !person.ready || Boolean(person.updatedAt && !Number.isFinite(Date.parse(person.updatedAt)));
 }
 
-function resultSummary(plan, now = Date.now()) {
-  const pendingCount = plan.participants.filter(person => participantNeedsSync(person, now)).length;
+function resultSummary(plan) {
+  const pendingCount = plan.participants.filter(person => participantNeedsAvailability(person)).length;
   const all = plan.proposals.some(slot => slot.all);
   let text = !plan.participants.length ? 'Comparteix l’enllaç per convidar el grup.'
     : plan.participants.length === 1 ? 'Falta que s’hi afegeixi la resta del grup.'
     : all ? 'Hi ha horaris per a tothom.'
     : pendingCount ? 'Encara no podem confirmar un horari per a tothom.'
     : 'Encara no hi ha cap horari per a tothom.';
-  if (pendingCount) text += ` ${pendingCount} ${pendingCount === 1 ? 'calendari pendent' : 'calendaris pendents'} de sincronitzar.`;
+  if (pendingCount) text += ` ${pendingCount} ${pendingCount === 1 ? 'persona amb disponibilitat pendent' : 'persones amb disponibilitat pendent'}.`;
   return text;
 }
 
@@ -372,7 +371,7 @@ function renderResults() {
   $('results-order').value = resultsOrder;
   $('results-order').disabled = !event.proposals.length;
   $('result-summary').textContent = resultSummary(event);
-  $('calendar-refresh-hint').hidden = !event.participants.some(person => participantNeedsSync(person));
+  $('calendar-refresh-hint').hidden = !event.participants.some(person => participantNeedsAvailability(person));
   $('results').replaceChildren(...groupResultDays(event.proposals, resultsOrder).map(({ day, slots }) => {
     const section = document.createElement('section'); section.className = 'result-day';
     const heading = document.createElement('h3'); heading.textContent = dateLabel(day);
@@ -409,7 +408,7 @@ function render() {
     mode = event.own.provider;
     $('person-name').textContent = event.own.manualOnly ? `Bloquejos de ${event.own.name}` : `Hola, ${event.own.name}`;
     $('leave').hidden = Boolean(event.own.manualOnly);
-    $('sync-status').textContent = event.own.manualOnly ? 'Connecta el teu compte de Google per sincronitzar el calendari. Els bloquejos manuals ja es poden editar.'
+    $('sync-status').textContent = event.own.manualOnly ? 'Pots editar els bloquejos manuals sense connectar cap calendari.'
       : mode === 'manual' ? 'Disponibilitat manual.'
       : (event.own.syncedAt ? `Actualitzat: ${instant(event.own.syncedAt)}.` : 'Selecciona els calendaris que vols compartir.');
     renderConnections();
@@ -419,7 +418,7 @@ function render() {
     const li = document.createElement('li');
     const name = document.createElement('span'); name.textContent = person.name;
     const status = document.createElement('small');
-    status.textContent = participantNeedsSync(person) ? 'Calendari pendent de sincronitzar' : 'Disponibilitat compartida';
+    status.textContent = participantNeedsAvailability(person) ? 'Disponibilitat pendent' : 'Disponibilitat compartida';
     if (person.updatedAt && Number.isFinite(Date.parse(person.updatedAt))) status.title = `Última sincronització: ${instant(person.updatedAt)}`;
     li.append(name, status); return li;
   }));
@@ -447,7 +446,7 @@ async function load(code, { sync = true } = {}) {
       render();
     } catch (error) {
       failedSync = true;
-      showError(`No s’ha pogut actualitzar el teu calendari: ${error.message}`);
+      showError(`No s’ha pogut actualitzar el teu calendari: ${error.message}${event.own.syncedAt ? ' Es manté l’última disponibilitat desada.' : ''}`);
       event = await api(`events/${code}`, undefined, 'GET');
       render();
     }
@@ -644,12 +643,13 @@ async function updateCalendars() {
   const selected = [...$('calendar-list').querySelectorAll('input:checked')].map(input => input.value);
   try {
     await syncCalendar({ selected });
-    await load(event.code, { sync: false });
     failedSync = false;
+    await load(event.code, { sync: false });
   } catch (error) {
+    failedSync = true;
     event = await api(`events/${event.code}`, undefined, 'GET');
     render();
-    throw error;
+    throw new Error(`${error.message}${event.own.syncedAt ? ' Es manté l’última disponibilitat desada.' : ''}`);
   }
 }
 $('sync').addEventListener('click', run(updateCalendars));

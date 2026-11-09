@@ -258,6 +258,39 @@ test('shared plans support name-only blocks and private calendar disconnection w
     }
   });
 
+  await t.test('failed optional synchronization preserves the last saved calendar and manual preferences', async () => {
+    const [original] = await sql`SELECT data FROM quedem_people WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+    const nativeFetch = globalThis.fetch;
+    try {
+      for (const failure of ['calendar', 'refresh']) {
+        const data = failure === 'refresh' ? {
+          ...original.data, tokens: encrypt({ access: 'expired-test-access', refresh: 'expired-test-refresh', expires: 0 })
+        } : original.data;
+        await sql`UPDATE quedem_people SET data=${JSON.stringify(data)}::jsonb WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+        const before = await get(owner);
+        let failed = false;
+        globalThis.fetch = async (url, options) => {
+          if (String(url).startsWith('https://www.googleapis.com/') || String(url) === 'https://oauth2.googleapis.com/token') {
+            failed = true;
+            return Response.json({}, { status: 403 });
+          }
+          return nativeFetch(url, options);
+        };
+        assert.equal((await owner(`${path}/sync`, {})).status, 401);
+        assert.equal(failed, true);
+        const [after] = await sql`SELECT data FROM quedem_people WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+        assert.deepEqual(after.data, data);
+        const view = await get(owner);
+        assert.deepEqual(view.own, before.own);
+        assert.deepEqual(view.proposals, before.proposals);
+        assert.equal(view.participants[0].ready, true);
+      }
+    } finally {
+      globalThis.fetch = nativeFetch;
+      await sql`UPDATE quedem_people SET data=${JSON.stringify(original.data)}::jsonb WHERE event_code=${code} AND session_hash=${record.session_hash}`;
+    }
+  });
+
   await t.test('OAuth cancellation belongs to its initiating browser and pending connections can be invalidated', async () => {
     const first = await owner(`${path}/connect`, { provider: 'google' });
     assert.equal(first.status, 200);

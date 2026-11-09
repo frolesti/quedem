@@ -325,24 +325,24 @@ test('changing order preserves day filters and editing drafts across result relo
   assert(node('results').children.every(section => !section.hidden));
 });
 
-test('calendar freshness uses the same strict 24-hour threshold without expiring manual availability', () => {
+test('saved availability remains ready regardless of age and does not require Google synchronization', () => {
   const { evaluate } = ui();
-  assert.equal(evaluate('participantNeedsSync({ ready: true, updatedAt: null }, 86400001)'), false);
-  assert.equal(evaluate('participantNeedsSync({ ready: false, updatedAt: null }, 86400001)'), true);
-  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: '2026-11-06T13:41:21.214Z' }, Date.parse('2026-11-07T13:41:21.214Z'))"), false);
-  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: '2026-11-06T13:41:21.214Z' }, Date.parse('2026-11-07T13:41:21.215Z'))"), true);
-  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: 'invalid' })"), true);
+  assert.equal(evaluate('participantNeedsAvailability({ ready: true, updatedAt: null })'), false);
+  assert.equal(evaluate('participantNeedsAvailability({ ready: false, updatedAt: null })'), true);
+  assert.equal(evaluate("participantNeedsAvailability({ ready: true, updatedAt: '2026-11-06T13:41:21.214Z' })"), false);
+  assert.equal(evaluate("participantNeedsAvailability({ ready: true, updatedAt: '2020-01-01T00:00:00Z' })"), false);
+  assert.equal(evaluate("participantNeedsAvailability({ ready: true, updatedAt: 'invalid' })"), true);
 });
 
-test('pending calendars prevent definitive no-match wording and the hint disappears after synchronization', () => {
+test('only missing availability is pending, and manual availability removes the pending hint', () => {
   const { evaluate, node } = ui();
   evaluate(`event = { code: 'PENDING', proposals: [], participants: [
-    { ready: true, updatedAt: null }, { ready: true, updatedAt: '2020-01-01T00:00:00Z' }
+    { ready: true, updatedAt: '2020-01-01T00:00:00Z' }, { ready: false, updatedAt: null }
   ] }; renderResults();`);
-  assert.equal(node('result-summary').textContent, 'Encara no podem confirmar un horari per a tothom. 1 calendari pendent de sincronitzar.');
+  assert.equal(node('result-summary').textContent, 'Encara no podem confirmar un horari per a tothom. 1 persona amb disponibilitat pendent.');
   assert.equal(node('calendar-refresh-hint').hidden, false);
   assert.equal(node('results-order').disabled, true);
-  evaluate('event.participants[1].updatedAt = new Date().toISOString(); renderResults();');
+  evaluate('event.participants[1].ready = true; renderResults();');
   assert.equal(node('result-summary').textContent, 'Encara no hi ha cap horari per a tothom.');
   assert.equal(node('calendar-refresh-hint').hidden, true);
 });

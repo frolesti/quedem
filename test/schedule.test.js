@@ -75,9 +75,30 @@ test('three independent calendars produce different full-group hours and partial
   assert.deepEqual(results.filter(slot => slot.day === '2026-12-02' && slot.all).map(slot => slot.start), ['2026-12-02T17:00:00.000Z', '2026-12-02T18:00:00.000Z']);
   assert(results.some(slot => slot.available === 2 && slot.total === 3 && !slot.all));
 });
-test('stale or failed calendar connections are not treated as free', () => {
-  for (const syncedAt of [null, 'invalid', now.minus({ days: 2 }).toISO()]) {
+test('calendar connections without any valid saved snapshot are not treated as free', () => {
+  for (const syncedAt of [null, 'invalid']) {
     assert.equal(rank(event, [{ ...person, provider: 'google', syncedAt }], now.toMillis()).length, 0);
+  }
+});
+test('saved calendar availability never expires and keeps conflicts, manual blocks and flexibility', () => {
+  for (const provider of ['google', 'microsoft']) {
+    const saved = {
+      ...person, provider, syncedAt: now.minus({ days: 365 }).toISO(),
+      busy: [
+        { id: 'blocked', start: '2026-12-01T19:00Z', end: '2026-12-01T20:00Z' },
+        { id: 'flexible', start: '2026-12-03T19:00Z', end: '2026-12-03T23:00Z' }
+      ],
+      flexibleConflicts: ['flexible'], excludedDates: ['2026-12-02'],
+      blockedRanges: [{ day: '2026-12-03', start: '22:00', end: '23:00' }]
+    };
+    const results = rank(event, [saved], now.toMillis());
+    assert.deepEqual(results, rank(event, [{ ...saved, syncedAt: now.toISO() }], now.toMillis()));
+    assert(results.length > 0);
+    assert(results.every(slot => slot.checked === 1 && slot.all));
+    assert(!results.some(slot => slot.day === '2026-12-02'));
+    assert(!results.some(slot => slot.start === '2026-12-01T19:00:00.000Z'));
+    assert(results.some(slot => slot.start === '2026-12-03T19:00:00.000Z'));
+    assert(!results.some(slot => slot.start === '2026-12-03T21:00:00.000Z'));
   }
 });
 test('busy conflicts, manual exceptions and counts are respected', () => {

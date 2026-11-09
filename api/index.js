@@ -290,25 +290,20 @@ export default async function handler(req, res) {
           selected.some(id => !own.calendars.some(calendar => calendar.id === id))) {
         throw new AppError('Selecciona entre 1 i 20 calendaris del teu compte.');
       }
-      try {
-        const tokens = await refresh(own.provider, decrypt(own.tokens));
-        const detailsAvailable = canReadDetails(own.provider, tokens);
-        const slots = candidates(event.data).filter(slot => Date.parse(slot.start) > Date.now());
-        const details = detailsAvailable
-          ? (await conflicts(own.provider, tokens.access, selected, event.data, own.calendars)).filter(period => slots.some(slot => overlaps(slot, period)))
-          : null;
-        const periods = details ? details.map(({ id, start, end, seriesId }) => ({ id, start, end, ...(seriesId ? { seriesId } : {}) })) : await busy(own.provider, tokens.access, selected, event.data);
-        const flexibleConflicts = (own.flexibleConflicts ?? []).filter(id => periods.some(period => period.id === id));
-        const reviewedConflicts = (own.reviewedConflicts ?? []).filter(id => periods.some(period => period.id === id));
-        const seriesRules = (own.seriesRules ?? []).filter(rule => periods.some(period => period.seriesId === rule.id));
-        await savePerson(code, sessionHash, {
-          ...own, tokens: encrypt(tokens), selected, busy: periods, conflicts: details ? encrypt(details) : null,
-          detailsAvailable, flexibleConflicts, reviewedConflicts, seriesRules, syncedAt: new Date().toISOString(), confirmed: true
-        });
-      } catch (error) {
-        await savePerson(code, sessionHash, { ...own, syncedAt: null, busy: [], conflicts: null, flexibleConflicts: [], reviewedConflicts: [] });
-        throw error;
-      }
+      const tokens = await refresh(own.provider, decrypt(own.tokens));
+      const detailsAvailable = canReadDetails(own.provider, tokens);
+      const slots = candidates(event.data).filter(slot => Date.parse(slot.start) > Date.now());
+      const details = detailsAvailable
+        ? (await conflicts(own.provider, tokens.access, selected, event.data, own.calendars)).filter(period => slots.some(slot => overlaps(slot, period)))
+        : null;
+      const periods = details ? details.map(({ id, start, end, seriesId }) => ({ id, start, end, ...(seriesId ? { seriesId } : {}) })) : await busy(own.provider, tokens.access, selected, event.data);
+      const flexibleConflicts = (own.flexibleConflicts ?? []).filter(id => periods.some(period => period.id === id));
+      const reviewedConflicts = (own.reviewedConflicts ?? []).filter(id => periods.some(period => period.id === id));
+      const seriesRules = (own.seriesRules ?? []).filter(rule => periods.some(period => period.seriesId === rule.id));
+      await savePerson(code, sessionHash, {
+        ...own, tokens: encrypt(tokens), selected, busy: periods, conflicts: details ? encrypt(details) : null,
+        detailsAvailable, flexibleConflicts, reviewedConflicts, seriesRules, syncedAt: new Date().toISOString(), confirmed: true
+      });
       return send({ synced: true });
     }
     throw new AppError('Ruta no trobada.', 404);

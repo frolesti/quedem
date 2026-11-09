@@ -76,7 +76,7 @@ dimarts de 18 a 19 h i dimecres tenen diversos inicis entre les 17 i les 18 h.
 Dijous no hi ha cap hora per als tres. Afegir una quarta persona pendent no
 la considera lliure: després de connectar i consultar el seu calendari, cal
 comprovar els recomptes sobre quatre i l'exclusió dels seus conflictes.
-Les dades simulades també queden subjectes al límit de frescor de 24 hores.
+Les disponibilitats desades no caduquen al cap de 24 hores.
 
 ## Vercel i base de dades
 
@@ -253,8 +253,14 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
 - Autoritzacions OAuth xifrades AES-256-GCM, estat d'un sol ús amb caducitat,
   PKCE, verificació del navegador i verificació d'Origin per a mutacions.
 - Consulta pròpia en entrar al pla i botó d'actualització; no hi ha sincronització
-  contínua en segon pla. Després de 24 hores sense consultar, aquella agenda no
-  es compta com a lliure. Un error de consulta invalida l'última disponibilitat.
+  contínua en segon pla. Connectar un calendari és opcional i la disponibilitat
+  manual no requereix cap compte extern. La darrera consulta de calendari
+  continua sent vàlida fins que s'actualitza: no caduca al cap de 24 hores.
+  Si el proveïdor falla o l'autorització caduca, es comunica l'error sense
+  esborrar la consulta anterior, els bloquejos ni les preferències. Els canvis
+  posteriors del calendari extern només es reflecteixen després d'una nova
+  sincronització correcta. Es mostra la data de la darrera consulta privada
+  i al detall de l'estat del participant.
   Els calendaris es mostren en un desplegable natiu (`details`/`summary`),
   sense botó de mostrar/amagar, amb el recompte de calendaris seleccionats. En entrar,
   es mostren si encara no n'hi ha cap seleccionat; si ja hi ha selecció,
@@ -274,8 +280,10 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   bloquegen dies o hores. No hi ha botó de confirmació de tots els dies lliures.
   Les participacions manuals antigues pendents també compten com a lliures,
   respectant bloquejos explícits; les seleccions parcials ja confirmades es
-  conserven. Els calendaris pendents, fallits o caducats continuen pendents,
-  mai es pressuposen lliures. El mateix editor permet, amb calendari o sense,
+  conserven. Un calendari sense cap consulta correcta continua sense dades;
+  mai s'inventa una disponibilitat lliure si no s'ha pogut importar.
+  Una consulta antiga sí que es conserva i continua comptant.
+  El mateix editor permet, amb calendari o sense,
   bloquejar dies sencers o hores concretes. Passar d'un calendari a manual demana confirmació
   perquè elimina l'autorització i declara lliures els horaris no bloquejats.
   Es poden seleccionar diversos dies arrossegant amb ratolí o dit, sense
@@ -317,10 +325,10 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   En pantalles petites o molt baixes es manté el desplaçament normal.
   Els plans nous tenen durades d'1, 2, 3 o 4 hores; els plans anteriors conserven
   la seva durada sense modificar-la retroactivament.
-  Un calendari sense sincronitzar o de més de 24 hores s'etiqueta
-  «Calendari pendent de sincronitzar», no «Cal actualitzar». Si hi ha calendaris
-  pendents, l'absència de coincidència completa es presenta com una manca de
-  confirmació, no com una incompatibilitat definitiva del grup.
+  Només la manca de dades de disponibilitat s'etiqueta «Disponibilitat pendent»;
+  l'antiguitat d'una consulta no obliga a sincronitzar ni fa perdre participació.
+  Si falten disponibilitats, l'absència de coincidència completa es presenta
+  com una manca de confirmació, no com una incompatibilitat definitiva del grup.
   «Recarregar resultats del grup» consulta les dades desades i només pot
   sincronitzar automàticament la participació privada autoritzada del navegador;
   seleccionar un nom no autoritza la consulta del seu calendari.
