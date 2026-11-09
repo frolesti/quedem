@@ -10,15 +10,22 @@ function ui({
   history = { replaceState() {} }
 } = {}) {
   const nodes = new Map();
+  const element = () => ({
+    textContent: '', hidden: false, disabled: false, value: '', dataset: {}, children: [], listeners: {},
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    setCustomValidity(value) { this.validationMessage = value; },
+    append(...children) { this.children.push(...children); },
+    replaceChildren(...children) { this.children = children; },
+    querySelectorAll(selector) {
+      return this.children.flatMap(child => [
+        ...(child.className?.split(' ').includes(selector.slice(1)) ? [child] : []),
+        ...child.querySelectorAll(selector)
+      ]);
+    },
+    setAttribute(name, value) { this[name] = value; }
+  });
   const node = id => {
-    if (!nodes.has(id)) nodes.set(id, {
-      textContent: '', hidden: false, disabled: false, value: '',
-      addEventListener() {},
-      setCustomValidity(value) { this.validationMessage = value; },
-      replaceChildren(...children) { this.children = children; },
-      querySelectorAll() { return []; },
-      setAttribute(name, value) { this[name] = value; }
-    });
+    if (!nodes.has(id)) nodes.set(id, element());
     return nodes.get(id);
   };
   const elements = {
@@ -27,7 +34,7 @@ function ui({
   };
   node('create-form').elements = elements;
   const context = vm.createContext({
-    document: { getElementById: node, createElement: () => ({}) },
+    document: { getElementById: node, createElement: element },
     // Keep bootstrap pending: each test drives the actual UI functions explicitly.
     fetch: () => new Promise(() => {}),
     URL, URLSearchParams,
@@ -261,4 +268,81 @@ test('filter stays recoverable when every day is partial and disappears when no 
   evaluate('updateResultFilter();');
   assert.equal(node('filtered-empty').hidden, true);
   assert.equal(node('toggle-partial-days').hidden, true);
+});
+
+const resultFixtures = [
+  { day: '2026-12-01', start: '2026-12-01T18:00:00Z', end: '2026-12-01T19:00:00Z', available: 2, total: 13, all: false },
+  { day: '2026-12-04', start: '2026-12-04T18:00:00Z', end: '2026-12-04T19:00:00Z', available: 10, total: 13, all: false },
+  { day: '2026-12-02', start: '2026-12-02T18:00:00Z', end: '2026-12-02T19:00:00Z', available: 13, total: 13, all: true },
+  { day: '2026-12-03', start: '2026-12-03T18:00:00Z', end: '2026-12-03T19:00:00Z', available: 10, total: 13, all: false },
+  { day: '2026-12-01', start: '2026-12-01T16:00:00Z', end: '2026-12-01T17:00:00Z', available: 1, total: 13, all: false }
+];
+
+test('availability sorting uses each day’s best slot, numeric counts and chronological ties', () => {
+  const { evaluate } = ui();
+  evaluate(`event = { proposals: ${JSON.stringify(resultFixtures)} };`);
+  const original = evaluate('JSON.stringify(event.proposals)');
+  for (const [order, expected] of [
+    ['availability-desc', '2026-12-02,2026-12-03,2026-12-04,2026-12-01'],
+    ['availability-asc', '2026-12-01,2026-12-03,2026-12-04,2026-12-02'],
+    ['date', '2026-12-01,2026-12-02,2026-12-03,2026-12-04']
+  ]) {
+    assert.equal(evaluate(`groupResultDays(event.proposals, '${order}').map(group => group.day).join(',')`), expected);
+    assert.equal(evaluate(`groupResultDays(event.proposals, '${order}').find(group => group.day === '2026-12-01').slots.map(slot => slot.start).join(',')`),
+      '2026-12-01T16:00:00Z,2026-12-01T18:00:00Z');
+  }
+  assert.equal(evaluate('JSON.stringify(event.proposals)'), original);
+  assert.equal(evaluate("groupResultDays([], 'availability-desc').length"), 0);
+});
+
+test('all slot fractions are rendered directly, with no collapsed alternatives per day', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'RESULTS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();`);
+  assert.equal(node('results-order').value, 'availability-desc');
+  assert.equal(node('results').children[0].children[0].textContent, '02/12/2026');
+  const slots = node('results').querySelectorAll('.slot-option');
+  assert.equal(slots.length, resultFixtures.length);
+  assert.equal(slots[0].children[0].children[1].textContent, 'Tothom · 13/13');
+  assert.equal(slots[1].children[0].children[1].textContent, '10/13 disponibles');
+  assert.equal(node('results').querySelectorAll('.remaining-slots').length, 0);
+  assert.equal(node('results').children[0].dataset.full, 'true');
+});
+
+test('changing order preserves day filters and editing drafts across result reloads', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'RESULTS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();
+    showPartialDays = false; selectedDays = new Set(['2026-12-01']); draftExcluded = new Set(['2026-12-04']);`);
+  node('results-order').listeners.change({ target: { value: 'availability-asc' } });
+  assert.equal(node('results').children[0].children[0].textContent, '01/12/2026');
+  assert.equal(node('results').children[0].hidden, true);
+  assert.equal(node('results').children[3].hidden, false);
+  evaluate('renderResults();');
+  assert.equal(node('results-order').value, 'availability-asc');
+  assert.equal(evaluate('selectedDays.size'), 1);
+  assert.equal(evaluate('draftExcluded.size'), 1);
+  evaluate("event.code = 'NEW-EVENT'; renderResults();");
+  assert.equal(node('results-order').value, 'availability-desc');
+  assert(node('results').children.every(section => !section.hidden));
+});
+
+test('calendar freshness uses the same strict 24-hour threshold without expiring manual availability', () => {
+  const { evaluate } = ui();
+  assert.equal(evaluate('participantNeedsSync({ ready: true, updatedAt: null }, 86400001)'), false);
+  assert.equal(evaluate('participantNeedsSync({ ready: false, updatedAt: null }, 86400001)'), true);
+  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: '2026-11-06T13:41:21.214Z' }, Date.parse('2026-11-07T13:41:21.214Z'))"), false);
+  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: '2026-11-06T13:41:21.214Z' }, Date.parse('2026-11-07T13:41:21.215Z'))"), true);
+  assert.equal(evaluate("participantNeedsSync({ ready: true, updatedAt: 'invalid' })"), true);
+});
+
+test('pending calendars prevent definitive no-match wording and the hint disappears after synchronization', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'PENDING', proposals: [], participants: [
+    { ready: true, updatedAt: null }, { ready: true, updatedAt: '2020-01-01T00:00:00Z' }
+  ] }; renderResults();`);
+  assert.equal(node('result-summary').textContent, 'Encara no podem confirmar un horari per a tothom. 1 calendari pendent de sincronitzar.');
+  assert.equal(node('calendar-refresh-hint').hidden, false);
+  assert.equal(node('results-order').disabled, true);
+  evaluate('event.participants[1].updatedAt = new Date().toISOString(); renderResults();');
+  assert.equal(node('result-summary').textContent, 'Encara no hi ha cap horari per a tothom.');
+  assert.equal(node('calendar-refresh-hint').hidden, true);
 });

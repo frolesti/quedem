@@ -161,7 +161,7 @@ dialog .check { margin: 10px 0; }
 .result-day > h3 { font-size: 17px; margin: 20px 0 8px; }
 .slot-option summary { cursor: pointer; list-style: none; }
 .slot-option summary::-webkit-details-marker { display: none; }
-.day-best { font-size: 13px; line-height: 1.6; }
+.results-order { margin: 20px 0 12px; }
 .day-toggle { font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .day-slots { list-style: none; padding: 0; margin: 0; }
 .day-slots .proposal { padding: 10px 0; font-size: 14px; font-variant-numeric: tabular-nums; }
@@ -171,15 +171,13 @@ dialog .check { margin: 10px 0; }
 .slot-attendance li > * { min-width: 0; overflow-wrap: anywhere; }
 .slot-attendance strong { text-align: right; }
 #conflict-list { display: grid; gap: 10px; }
-.remaining-slots > summary { cursor: pointer; list-style: none; padding: 16px 0; font-size: 13px; line-height: 1.6; text-decoration: underline; text-underline-offset: 3px; }
-.remaining-slots > summary::-webkit-details-marker { display: none; }
 .conflict-state { display: block; margin-top: 8px; font-size: 11px; font-weight: 650; }
-.when-open, .slot-option[open] > summary .when-closed, .remaining-slots[open] > summary .when-closed, .recurring-conflict > details[open] > summary .when-closed, .calendar-menu[open] > summary .when-closed { display: none; }
-.slot-option[open] > summary .when-open, .remaining-slots[open] > summary .when-open, .recurring-conflict > details[open] > summary .when-open, .calendar-menu[open] > summary .when-open { display: inline; }
+.when-open, .slot-option[open] > summary .when-closed, .recurring-conflict > details[open] > summary .when-closed, .calendar-menu[open] > summary .when-closed { display: none; }
+.slot-option[open] > summary .when-open, .recurring-conflict > details[open] > summary .when-open, .calendar-menu[open] > summary .when-open { display: inline; }
 #participants { list-style: none; padding: 0; }
 #participants li { display: flex; justify-content: space-between; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--rule); font-size: 13px; }
 #participants span { min-width: 0; overflow-wrap: anywhere; }
-#participants small { flex-shrink: 0; color: var(--muted); font-size: 11px; }
+#participants small { min-width: 0; max-width: 65%; text-align: right; color: var(--muted); font-size: 11px; overflow-wrap: anywhere; }
 .event-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; margin: 24px 0; }
 .privacy { margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--rule); color: var(--muted); font-size: 12px; line-height: 1.8; }
 .privacy summary { color: var(--ink); font-weight: 600; cursor: pointer; padding: 6px 0; }

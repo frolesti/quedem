@@ -21,6 +21,7 @@ let rangeDays = 14;
 let calendarPanelKey;
 let resultsEventCode;
 let showPartialDays = true;
+let resultsOrder = 'availability-desc';
 
 function showError(message) {
   if ($('block-dialog').open) {
@@ -330,11 +331,66 @@ function renderIdentity() {
   $('existing-person').value = event.editingId ?? '';
 }
 
-function render() {
+function participantNeedsSync(person, now = Date.now()) {
+  return !person.ready || Boolean(person.updatedAt &&
+    (!Number.isFinite(Date.parse(person.updatedAt)) || now - Date.parse(person.updatedAt) > 86400000));
+}
+
+function resultSummary(plan, now = Date.now()) {
+  const pendingCount = plan.participants.filter(person => participantNeedsSync(person, now)).length;
+  const all = plan.proposals.some(slot => slot.all);
+  let text = !plan.participants.length ? 'Comparteix l’enllaç per convidar el grup.'
+    : plan.participants.length === 1 ? 'Falta que s’hi afegeixi la resta del grup.'
+    : all ? 'Hi ha horaris per a tothom.'
+    : pendingCount ? 'Encara no podem confirmar un horari per a tothom.'
+    : 'Encara no hi ha cap horari per a tothom.';
+  if (pendingCount) text += ` ${pendingCount} ${pendingCount === 1 ? 'calendari pendent' : 'calendaris pendents'} de sincronitzar.`;
+  return text;
+}
+
+function groupResultDays(proposals, order) {
+  const grouped = new Map();
+  for (const slot of proposals) {
+    if (!grouped.has(slot.day)) grouped.set(slot.day, []);
+    grouped.get(slot.day).push(slot);
+  }
+  const result = [...grouped].map(([day, slots]) => ({
+    day, slots: slots.sort((a, b) => Date.parse(a.start) - Date.parse(b.start)),
+    best: Math.max(...slots.map(slot => slot.available))
+  }));
+  return result.sort((a, b) =>
+    (order === 'availability-desc' ? b.best - a.best : order === 'availability-asc' ? a.best - b.best : 0) ||
+    a.day.localeCompare(b.day));
+}
+
+function renderResults() {
   if (resultsEventCode !== event.code) {
     resultsEventCode = event.code;
     showPartialDays = true;
+    resultsOrder = 'availability-desc';
   }
+  $('results-order').value = resultsOrder;
+  $('results-order').disabled = !event.proposals.length;
+  $('result-summary').textContent = resultSummary(event);
+  $('calendar-refresh-hint').hidden = !event.participants.some(person => participantNeedsSync(person));
+  $('results').replaceChildren(...groupResultDays(event.proposals, resultsOrder).map(({ day, slots }) => {
+    const section = document.createElement('section'); section.className = 'result-day';
+    const heading = document.createElement('h3'); heading.textContent = dateLabel(day);
+    section.dataset.full = String(slots.some(slot => slot.all));
+    const list = document.createElement('div'); list.className = 'day-slots';
+    list.append(...slots.map(proposalOption));
+    section.append(heading, list);
+    return section;
+  }));
+  if (!event.proposals.length) {
+    const empty = document.createElement('p'); empty.className = 'hint';
+    empty.textContent = 'Encara no hi ha cap coincidència. Afegiu disponibilitats o actualitzeu els calendaris.';
+    $('results').append(empty);
+  }
+  updateResultFilter();
+}
+
+function render() {
   $('home').hidden = true; $('event').hidden = false;
   $('new-plan').hidden = false;
   $('event-title').textContent = event.title;
@@ -363,49 +419,11 @@ function render() {
     const li = document.createElement('li');
     const name = document.createElement('span'); name.textContent = person.name;
     const status = document.createElement('small');
-    status.textContent = !person.ready ? 'Pendent' : person.updatedAt && Date.now() - Date.parse(person.updatedAt) > 86400000 ? 'Cal actualitzar' : 'Disponibilitat compartida';
+    status.textContent = participantNeedsSync(person) ? 'Calendari pendent de sincronitzar' : 'Disponibilitat compartida';
+    if (person.updatedAt && Number.isFinite(Date.parse(person.updatedAt))) status.title = `Última sincronització: ${instant(person.updatedAt)}`;
     li.append(name, status); return li;
   }));
-  const all = event.proposals.some(slot => slot.all);
-  const pendingCount = event.participants.filter(person => !person.ready || person.updatedAt && Date.now() - Date.parse(person.updatedAt) > 86400000).length;
-  $('result-summary').textContent = !event.participants.length ? 'Comparteix l’enllaç per convidar el grup.'
-    : event.participants.length === 1 ? 'Falta que s’hi afegeixi la resta del grup.'
-    : all ? 'Hi ha horaris per a tothom.' : 'Encara no hi ha cap horari per a tothom.';
-  if (pendingCount) $('result-summary').textContent += ` ${pendingCount} ${pendingCount === 1 ? 'persona pendent' : 'persones pendents'}.`;
-  const grouped = new Map();
-  for (const slot of event.proposals) {
-    if (!grouped.has(slot.day)) grouped.set(slot.day, []);
-    grouped.get(slot.day).push(slot);
-  }
-  $('results').replaceChildren(...[...grouped].sort(([a], [b]) => a.localeCompare(b)).map(([day, slots]) => {
-    slots.sort((a, b) => Date.parse(a.start) - Date.parse(b.start));
-    const section = document.createElement('section'); section.className = 'result-day';
-    const heading = document.createElement('h3'); heading.textContent = dateLabel(day);
-    const free = slots.filter(slot => slot.all);
-    const other = slots.filter(slot => !slot.all);
-    section.dataset.full = String(Boolean(free.length));
-    const best = document.createElement('span'); best.className = 'day-best';
-    best.textContent = free.length ? `${free.length} ${free.length === 1 ? 'horari' : 'horaris'} sense conflictes per a tothom` : 'Cap horari sense conflictes per a tothom.';
-    const list = document.createElement('div'); list.className = 'day-slots';
-    list.append(...free.map(proposalOption));
-    section.append(heading, best, list);
-    if (other.length) {
-      const rest = document.createElement('details'); rest.className = 'remaining-slots';
-      const summary = document.createElement('summary');
-      const show = document.createElement('span'); show.className = 'when-closed'; show.textContent = `Altres horaris (${other.length})`;
-      const hide = document.createElement('span'); hide.className = 'when-open'; hide.textContent = 'Amagar els altres horaris';
-      summary.append(show, hide);
-      const list = document.createElement('div'); list.className = 'day-slots'; list.append(...other.map(proposalOption));
-      rest.append(summary, list); section.append(rest);
-    }
-    return section;
-  }));
-  if (!event.proposals.length) {
-    const empty = document.createElement('p'); empty.className = 'hint';
-    empty.textContent = 'Encara no hi ha cap coincidència. Afegiu disponibilitats o actualitzeu els calendaris.';
-    $('results').append(empty);
-  }
-  updateResultFilter();
+  renderResults();
   applyDisabled();
 }
 
@@ -654,6 +672,10 @@ $('share').addEventListener('click', run(async () => {
   }
 }));
 $('reload').addEventListener('click', run(async () => { failedSync = false; await load(event.code); }));
+$('results-order').addEventListener('change', e => {
+  resultsOrder = e.target.value;
+  renderResults();
+});
 $('toggle-partial-days').addEventListener('click', () => {
   showPartialDays = !showPartialDays;
   updateResultFilter();

@@ -295,16 +295,21 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   Europe/Madrid, incloent canvis d'horari d'estiu i sopars fins a mitjanit.
   Es retornen tots els horaris amb almenys una persona disponible, sense tall
   als primers dies ni a una sola hora per dia. La interfície els agrupa per dia,
-  ordena els dies i les hores cronològicament dins de cada llista i mostra directament els horaris sense
-  conflictes per a tothom. Els horaris parcials o amb participants pendents
-  queden dins de «Mostrar altres horaris». Cada opció permet desplegar
-  l'assistència individual. Amb una
+  mostra tots els horaris i la seva fracció de disponibilitat sense haver de
+  desplegar cada dia. Només l'assistència individual queda plegada.
+  «Ordenar per» ofereix més disponibilitat (ordre inicial), menys disponibilitat
+  o data. La disponibilitat d'un dia és el màxim de persones disponibles en
+  una de les seves franges; els empats es resolen per data. Això situa els dies
+  amb alguna coincidència completa al principi en l'ordre inicial. Les hores
+  dins de cada dia sempre són cronològiques, sense separar les franges completes
+  de les parcials. L'ordre triat es conserva durant els recàlculs i les recàrregues
+  de dades del mateix pla, i no modifica les disponibilitats. Amb una
   sola persona no es parla de coincidència de grup. Dates, franja i durada es
   mostren juntes a la capçalera del pla.
   Una única fletxa funcional permet amagar o tornar a mostrar tots els dies
   sense cap horari amb coincidència completa. Els dies amb algun horari per a
-  tothom continuen visibles, incloent les seves alternatives parcials plegades.
-  Es conserva l'ordre cronològic i el filtre durant els recàlculs de la pàgina;
+  tothom continuen visibles, incloent les seves alternatives parcials.
+  Es conserva l'ordre triat i el filtre durant els recàlculs de la pàgina;
   si no hi ha dies complets, es mostra com recuperar les alternatives amagades.
   A partir de 851 píxels d'amplada i 480 d'alçada, la columna de participació
   queda fixada a 16 píxels del marge superior mentre es recorren els resultats.
@@ -312,6 +317,13 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   En pantalles petites o molt baixes es manté el desplaçament normal.
   Els plans nous tenen durades d'1, 2, 3 o 4 hores; els plans anteriors conserven
   la seva durada sense modificar-la retroactivament.
+  Un calendari sense sincronitzar o de més de 24 hores s'etiqueta
+  «Calendari pendent de sincronitzar», no «Cal actualitzar». Si hi ha calendaris
+  pendents, l'absència de coincidència completa es presenta com una manca de
+  confirmació, no com una incompatibilitat definitiva del grup.
+  «Recarregar resultats del grup» consulta les dades desades i només pot
+  sincronitzar automàticament la participació privada autoritzada del navegador;
+  seleccionar un nom no autoritza la consulta del seu calendari.
 - Revisió privada de conflictes: marcar o desmarcar un compromís com a flexible
   es desa i recalcula els resultats automàticament, sense tornar a consultar el
   proveïdor ni haver de confirmar de nou. L'estat ocupat/flexible i

@@ -81,9 +81,11 @@
             <div class="dialog-actions"><button value="block">Bloquejar</button><button value="clear" class="secondary">Treure bloquejos</button><button value="cancel" class="secondary" formnovalidate>Cancel·lar</button></div>
           </form>
         </dialog>
-        <section class="sheet results-sheet"><h2>Quan coincidim?</h2><p id="result-summary" class="hint"></p><button id="toggle-partial-days" class="result-filter" aria-expanded="true" aria-controls="results" hidden></button><p id="filtered-empty" class="hint" hidden>No hi ha cap dia amb coincidència completa. Desplega els altres dies per veure les alternatives.</p><div id="results"></div><h3>Participants</h3><ul id="participants"></ul></section>
+        <section class="sheet results-sheet"><h2>Quan coincidim?</h2><p id="result-summary" class="hint" aria-live="polite"></p>
+          <label class="results-order">Ordenar per<select id="results-order" aria-controls="results"><option value="availability-desc">Més disponibilitat</option><option value="availability-asc">Menys disponibilitat</option><option value="date">Data</option></select></label>
+          <button id="toggle-partial-days" class="result-filter" aria-expanded="true" aria-controls="results" hidden></button><p id="filtered-empty" class="hint" hidden>No hi ha cap dia amb coincidència completa. Desplega els altres dies per veure les alternatives.</p><div id="results"></div><h3>Participants</h3><p id="calendar-refresh-hint" class="hint" hidden>Per sincronitzar un calendari cal autoritzar el compte corresponent; recarregar els resultats no ho substitueix.</p><ul id="participants"></ul></section>
       </div>
-      <div class="event-actions"><button id="reload" class="secondary">Actualitzar resultats</button><button id="delete-event" class="text-button" hidden>Eliminar el pla</button></div>
+      <div class="event-actions"><button id="reload" class="secondary">Recarregar resultats del grup</button><button id="delete-event" class="text-button" hidden>Eliminar el pla</button></div>
     </section>
     <details class="privacy"><summary>Privadesa</summary><p>L’enllaç del pla dona accés al grup. El grup veu la teva disponibilitat i pot seleccionar el teu nom per editar els bloquejos manuals, però no accedeix als calendaris ni als títols dels compromisos. No es modifica cap calendari.</p><p>Les dades es desen al servidor i aquest navegador et recorda durant 90 dies. Pots retirar les teves dades o desconnectar el calendari conservant els bloquejos manuals. Passada una setmana de l’última data del pla, les dades s’eliminen en la següent neteja del servei.</p></details>
   </main>
