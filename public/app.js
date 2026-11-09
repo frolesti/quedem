@@ -315,6 +315,11 @@ function updateResultFilter() {
   $('toggle-partial-days').setAttribute('aria-expanded', String(showPartialDays));
   $('toggle-partial-days').textContent = `${showPartialDays ? 'Amagar' : 'Mostrar'} ${partial.length} ${partial.length === 1 ? 'dia' : 'dies'} sense coincidència completa`;
   partial.forEach(section => { section.hidden = !showPartialDays; });
+  $('results').querySelectorAll('.availability-group').forEach(group => {
+    const visible = [...group.querySelectorAll('.result-day')].filter(section => !section.hidden);
+    group.hidden = !visible.length;
+    group.querySelector('.group-day-count').textContent = `${visible.length} ${visible.length === 1 ? 'dia' : 'dies'}`;
+  });
   $('filtered-empty').hidden = showPartialDays || !partial.length || sections.some(section => section.dataset.full === 'true');
 }
 
@@ -362,6 +367,17 @@ function groupResultDays(proposals, order) {
     a.day.localeCompare(b.day));
 }
 
+function renderResultDay({ day, slots }, grouped = false) {
+  const section = document.createElement('section'); section.className = 'result-day';
+  const heading = document.createElement(grouped ? 'h4' : 'h3'); heading.className = 'result-date';
+  heading.textContent = dateLabel(day);
+  section.dataset.full = String(slots.some(slot => slot.all));
+  const list = document.createElement('div'); list.className = 'day-slots';
+  list.append(...slots.map(proposalOption));
+  section.append(heading, list);
+  return section;
+}
+
 function renderResults() {
   if (resultsEventCode !== event.code) {
     resultsEventCode = event.code;
@@ -372,15 +388,40 @@ function renderResults() {
   $('results-order').disabled = !event.proposals.length;
   $('result-summary').textContent = resultSummary(event);
   $('calendar-refresh-hint').hidden = !event.participants.some(person => participantNeedsAvailability(person));
-  $('results').replaceChildren(...groupResultDays(event.proposals, resultsOrder).map(({ day, slots }) => {
-    const section = document.createElement('section'); section.className = 'result-day';
-    const heading = document.createElement('h3'); heading.textContent = dateLabel(day);
-    section.dataset.full = String(slots.some(slot => slot.all));
-    const list = document.createElement('div'); list.className = 'day-slots';
-    list.append(...slots.map(proposalOption));
-    section.append(heading, list);
-    return section;
-  }));
+  const days = groupResultDays(event.proposals, resultsOrder);
+  if (resultsOrder === 'date') {
+    $('results').replaceChildren(...days.map(day => renderResultDay(day)));
+  } else {
+    const levels = new Map();
+    days.forEach(day => {
+      if (!levels.has(day.best)) levels.set(day.best, []);
+      levels.get(day.best).push(day);
+    });
+    const best = Math.max(...levels.keys());
+    $('results').replaceChildren(...[...levels].map(([available, days]) => {
+      const total = days[0].slots[0].total;
+      const group = document.createElement('section'); group.className = 'availability-group';
+      group.dataset.best = String(available === best);
+      group.dataset.full = String(available === total && total > 1);
+      const header = document.createElement('header'); header.className = 'availability-group-heading';
+      const title = document.createElement('div');
+      if (available === best) {
+        const label = document.createElement('p'); label.className = 'eyebrow';
+        label.textContent = available === total && total > 1 ? 'Tothom pot venir' : 'Millor disponibilitat';
+        title.append(label);
+      }
+      const heading = document.createElement('h3'); heading.id = `availability-${available}`;
+      heading.textContent = `${available}/${total} ${available === 1 ? 'disponible' : 'disponibles'}`;
+      group.setAttribute('aria-labelledby', heading.id);
+      title.append(heading);
+      const count = document.createElement('span'); count.className = 'group-day-count';
+      header.append(title, count);
+      const list = document.createElement('div'); list.className = 'group-days';
+      list.append(...days.map(day => renderResultDay(day, true)));
+      group.append(header, list);
+      return group;
+    }));
+  }
   if (!event.proposals.length) {
     const empty = document.createElement('p'); empty.className = 'hint';
     empty.textContent = 'Encara no hi ha cap coincidència. Afegiu disponibilitats o actualitzeu els calendaris.';

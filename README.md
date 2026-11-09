@@ -310,7 +310,14 @@ facilitat retornava HTTP 403 durant la consulta i no se'n pressuposa el contingu
   una de les seves franges; els empats es resolen per data. Això situa els dies
   amb alguna coincidència completa al principi en l'ordre inicial. Les hores
   dins de cada dia sempre són cronològiques, sense separar les franges completes
-  de les parcials. L'ordre triat es conserva durant els recàlculs i les recàrregues
+  de les parcials. En ordenar per disponibilitat, els dies s'agrupen per la seva
+  millor franja, amb capçaleres com «12/13 disponibles · 1 dia» i
+  «11/13 disponibles · 2 dies». Es compten dies únics, no franges.
+  La millor disponibilitat es destaca en groc; els grups on pot venir tothom,
+  en verd fosc i amb l'etiqueta «Tothom pot venir». Les dates tenen un nivell
+  de títol inferior al del grup. En ordre cronològic no hi ha agrupacions.
+  El filtre amaga també les capçaleres dels grups que es queden sense dies.
+  L'ordre triat es conserva durant els recàlculs i les recàrregues
   de dades del mateix pla, i no modifica les disponibilitats. Amb una
   sola persona no es parla de coincidència de grup. Dates, franja i durada es
   mostren juntes a la capçalera del pla.

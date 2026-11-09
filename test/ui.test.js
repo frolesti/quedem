@@ -10,12 +10,13 @@ function ui({
   history = { replaceState() {} }
 } = {}) {
   const nodes = new Map();
-  const element = () => ({
-    textContent: '', hidden: false, disabled: false, value: '', dataset: {}, children: [], listeners: {},
+  const element = (tag = 'div') => ({
+    tagName: tag.toUpperCase(), textContent: '', hidden: false, disabled: false, value: '', dataset: {}, children: [], listeners: {},
     addEventListener(type, listener) { this.listeners[type] = listener; },
     setCustomValidity(value) { this.validationMessage = value; },
     append(...children) { this.children.push(...children); },
     replaceChildren(...children) { this.children = children; },
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null; },
     querySelectorAll(selector) {
       return this.children.flatMap(child => [
         ...(child.className?.split(' ').includes(selector.slice(1)) ? [child] : []),
@@ -237,7 +238,7 @@ test('one result filter hides only days without any full-group slot and preserve
     { dataset: { full: 'false' }, hidden: false },
     { dataset: { full: 'true' }, hidden: false }
   ];
-  node('results').querySelectorAll = () => sections;
+  node('results').querySelectorAll = selector => selector === '.result-day' ? sections : [];
   evaluate('updateResultFilter();');
   assert.equal(node('toggle-partial-days').hidden, false);
   assert.equal(node('toggle-partial-days').textContent, 'Amagar 2 dies sense coincidència completa');
@@ -254,7 +255,7 @@ test('one result filter hides only days without any full-group slot and preserve
 test('filter stays recoverable when every day is partial and disappears when no partial days exist', () => {
   const { evaluate, node } = ui();
   let sections = [{ dataset: { full: 'false' }, hidden: false }];
-  node('results').querySelectorAll = () => sections;
+  node('results').querySelectorAll = selector => selector === '.result-day' ? sections : [];
   evaluate('showPartialDays = false; updateResultFilter();');
   assert.equal(node('filtered-empty').hidden, false);
   assert.equal(node('toggle-partial-days').hidden, false);
@@ -299,13 +300,13 @@ test('all slot fractions are rendered directly, with no collapsed alternatives p
   const { evaluate, node } = ui();
   evaluate(`event = { code: 'RESULTS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();`);
   assert.equal(node('results-order').value, 'availability-desc');
-  assert.equal(node('results').children[0].children[0].textContent, '02/12/2026');
+  assert.equal(node('results').querySelectorAll('.result-day')[0].children[0].textContent, '02/12/2026');
   const slots = node('results').querySelectorAll('.slot-option');
   assert.equal(slots.length, resultFixtures.length);
   assert.equal(slots[0].children[0].children[1].textContent, 'Tothom · 13/13');
   assert.equal(slots[1].children[0].children[1].textContent, '10/13 disponibles');
   assert.equal(node('results').querySelectorAll('.remaining-slots').length, 0);
-  assert.equal(node('results').children[0].dataset.full, 'true');
+  assert.equal(node('results').querySelectorAll('.result-day')[0].dataset.full, 'true');
 });
 
 test('changing order preserves day filters and editing drafts across result reloads', () => {
@@ -313,9 +314,9 @@ test('changing order preserves day filters and editing drafts across result relo
   evaluate(`event = { code: 'RESULTS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();
     showPartialDays = false; selectedDays = new Set(['2026-12-01']); draftExcluded = new Set(['2026-12-04']);`);
   node('results-order').listeners.change({ target: { value: 'availability-asc' } });
-  assert.equal(node('results').children[0].children[0].textContent, '01/12/2026');
-  assert.equal(node('results').children[0].hidden, true);
-  assert.equal(node('results').children[3].hidden, false);
+  assert.equal(node('results').querySelectorAll('.result-day')[0].children[0].textContent, '01/12/2026');
+  assert.equal(node('results').querySelectorAll('.result-day')[0].hidden, true);
+  assert.equal(node('results').querySelectorAll('.result-day')[3].hidden, false);
   evaluate('renderResults();');
   assert.equal(node('results-order').value, 'availability-asc');
   assert.equal(evaluate('selectedDays.size'), 1);
@@ -323,6 +324,72 @@ test('changing order preserves day filters and editing drafts across result relo
   evaluate("event.code = 'NEW-EVENT'; renderResults();");
   assert.equal(node('results-order').value, 'availability-desc');
   assert(node('results').children.every(section => !section.hidden));
+});
+
+test('availability groups count unique days, highlight the best level and use nested date headings', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'GROUPS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();`);
+  const groups = node('results').querySelectorAll('.availability-group');
+  assert.equal(groups.length, 3);
+  assert.deepEqual(groups.map(group => group.querySelector('.group-day-count').textContent), ['1 dia', '2 dies', '1 dia']);
+  assert.deepEqual(groups.map(group => group.children[0].children[0].children.at(-1).textContent),
+    ['13/13 disponibles', '10/13 disponibles', '2/13 disponibles']);
+  assert.equal(groups[0].dataset.best, 'true');
+  assert.equal(groups[0].dataset.full, 'true');
+  assert.equal(groups[0].querySelector('.eyebrow').textContent, 'Tothom pot venir');
+  assert.equal(groups[1].dataset.best, 'false');
+  assert.equal(groups[1].querySelectorAll('.result-day')[0].children[0].textContent, '03/12/2026');
+  assert.equal(groups[1].querySelectorAll('.result-day')[1].children[0].textContent, '04/12/2026');
+  assert.equal(groups[0].querySelector('.result-date').tagName, 'H4');
+  const label = groups[0].children[0].children[0].children.at(-1);
+  assert.equal(groups[0]['aria-labelledby'], label.id);
+  const twoSlots = groups[2];
+  assert.equal(twoSlots.querySelectorAll('.slot-option').length, 2);
+  assert.equal(twoSlots.querySelector('.group-day-count').textContent, '1 dia');
+});
+
+test('ascending availability keeps groups and highlighting; date order removes grouping', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'GROUPS', participants: [], proposals: ${JSON.stringify(resultFixtures)} }; renderResults();`);
+  node('results-order').listeners.change({ target: { value: 'availability-asc' } });
+  let groups = node('results').querySelectorAll('.availability-group');
+  assert.deepEqual(groups.map(group => group.querySelector('.group-day-count').textContent), ['1 dia', '2 dies', '1 dia']);
+  assert.equal(groups[0].dataset.best, 'false');
+  assert.equal(groups[2].dataset.best, 'true');
+  node('results-order').listeners.change({ target: { value: 'date' } });
+  groups = node('results').querySelectorAll('.availability-group');
+  assert.equal(groups.length, 0);
+  const days = node('results').querySelectorAll('.result-day');
+  assert.deepEqual(days.map(day => day.children[0].textContent), ['01/12/2026', '02/12/2026', '03/12/2026', '04/12/2026']);
+  assert(days.every(day => day.children[0].tagName === 'H3'));
+});
+
+test('filtering hides empty group headers and restores counts without hiding partial slots on complete days', () => {
+  const { evaluate, node } = ui();
+  const partial = { ...resultFixtures[2], available: 10, all: false, start: '2026-12-02T19:00:00Z' };
+  evaluate(`event = { code: 'GROUPS', participants: [], proposals: ${JSON.stringify([...resultFixtures, partial])} }; renderResults();
+    showPartialDays = false; updateResultFilter();`);
+  const groups = node('results').querySelectorAll('.availability-group');
+  assert.deepEqual(groups.map(group => group.hidden), [false, true, true]);
+  assert.deepEqual(groups.map(group => group.querySelector('.group-day-count').textContent), ['1 dia', '0 dies', '0 dies']);
+  assert.equal(groups[0].querySelectorAll('.slot-option').length, 2);
+  evaluate('showPartialDays = true; updateResultFilter();');
+  assert(groups.every(group => !group.hidden));
+  assert.deepEqual(groups.map(group => group.querySelector('.group-day-count').textContent), ['1 dia', '2 dies', '1 dia']);
+  evaluate('event.proposals = event.proposals.filter(slot => !slot.all); renderResults(); showPartialDays = false; updateResultFilter();');
+  assert(node('results').querySelectorAll('.availability-group').every(group => group.hidden));
+  assert.equal(node('filtered-empty').hidden, false);
+});
+
+test('without a full-group date, only the best partial availability is highlighted', () => {
+  const { evaluate, node } = ui();
+  evaluate(`event = { code: 'GROUPS', participants: [], proposals: ${JSON.stringify(resultFixtures.filter(slot => !slot.all))} }; renderResults();`);
+  const groups = node('results').querySelectorAll('.availability-group');
+  assert.equal(groups[0].dataset.best, 'true');
+  assert.equal(groups[0].dataset.full, 'false');
+  assert.equal(groups[0].querySelector('.eyebrow').textContent, 'Millor disponibilitat');
+  assert.equal(groups[0].querySelector('.group-day-count').textContent, '2 dies');
+  assert.equal(groups[1].dataset.best, 'false');
 });
 
 test('saved availability remains ready regardless of age and does not require Google synchronization', () => {

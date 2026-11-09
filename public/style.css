@@ -158,7 +158,19 @@ dialog .check { margin: 10px 0; }
 .score { font-size: 12px; padding: 8px 10px; color: var(--ink); border-bottom: 2px solid #8c987c; }
 .score.all { background: var(--accent); border-color: var(--ink); }
 .result-day { border-top: 1px solid var(--ink); margin-top: 16px; }
-.result-day > h3 { font-size: 17px; margin: 20px 0 8px; }
+.result-day > .result-date { font-size: 18px; font-weight: 650; margin: 20px 0 8px; font-variant-numeric: tabular-nums; }
+.result-day[data-full="true"] { border-left: 3px solid var(--ink); padding-left: 12px; }
+.availability-group { margin-top: 28px; border-top: 2px solid var(--ink); }
+.availability-group-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 18px 16px; background: #e5ebd9; border: 0; }
+.availability-group-heading h3 { font-size: 24px; font-weight: 650; margin: 0; line-height: 1.3; font-variant-numeric: tabular-nums; }
+.availability-group-heading .eyebrow { margin-bottom: 6px; font-size: 10px; }
+.group-day-count { flex-shrink: 0; font-size: 14px; font-weight: 650; white-space: nowrap; }
+.availability-group[data-best="true"] > .availability-group-heading { background: var(--accent); }
+.availability-group[data-full="true"] > .availability-group-heading { background: var(--ink); color: var(--sheet); }
+.group-days { padding: 0 14px 10px; border-left: 1px solid var(--rule); }
+.group-days > .result-day { border-top-color: var(--rule); }
+.group-days > .result-day:first-child { border-top: 0; margin-top: 0; }
+.group-days > .result-day > .result-date { padding-top: 16px; margin-top: 0; }
 .slot-option summary { cursor: pointer; list-style: none; }
 .slot-option summary::-webkit-details-marker { display: none; }
 .results-order { margin: 20px 0 12px; }
